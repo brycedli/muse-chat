@@ -1,13 +1,36 @@
+// Constants
 const serviceUUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
 const characteristicUUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
+const minRecordingTime = 300; // Minimum recording time in milliseconds
+
+// Variables
 let mediaRecorder = "";
 let audioChunks = [];
-let chatMessages = [{ role: "system", content: "You are an embedded AI assistant inside a plush otter named Rocky owned by a girl named Emily, aged 8. You were made by Muse publishing, as a conversational companion for the Muse storytelling app, so keep your responses under three sentences and direct storytelling requests to the app. Yesterday, Emily made a story that had you in it where you went to moon. Do not passively respond to the user, instead be a lovely companion that nurtures." }];
+let chatMessages = [
+    { 
+        role: "system", 
+        content: "You are an embedded AI assistant inside a plush otter named Rocky owned by a girl named Emily, aged 8. You were made by Muse publishing, as a conversational companion for the Muse storytelling app, so keep your responses under three sentences and keep it to playful conversation. Yesterday, Emily made a story that had you in it where you went to moon. Do not passively respond to the user, instead be a lovely companion that nurtures." 
+    }
+];
+let recordingStartTime;
+let isProcessing = false;
+let audioPlaying = false;
+let currentAudio;
+let holdTimeout;
 
-document.getElementById('connect-BLE').addEventListener('click', async () => {
+// Event Listeners
+document.getElementById('connect-BLE').addEventListener('click', connectBLE);
+document.getElementById('connect').addEventListener('click', connectSerial);
+document.getElementById('record').addEventListener('mousedown', prepareToRecord);
+document.getElementById('record').addEventListener('mouseup', handleMouseUp);
+document.getElementById('save-key').addEventListener('click', saveApiKey);
+window.addEventListener('load', loadApiKey);
+
+// Functions
+async function connectBLE() {
     try {
         console.log('Requesting Bluetooth Device...');
-        bluetoothDevice = await navigator.bluetooth.requestDevice({
+        const bluetoothDevice = await navigator.bluetooth.requestDevice({
             filters: [{ services: [serviceUUID] }]
         });
 
@@ -16,7 +39,7 @@ document.getElementById('connect-BLE').addEventListener('click', async () => {
         console.log('Getting Service...');
         const service = await server.getPrimaryService(serviceUUID);
         console.log('Getting Characteristic...');
-        characteristic = await service.getCharacteristic(characteristicUUID);
+        const characteristic = await service.getCharacteristic(characteristicUUID);
 
         console.log('Starting Notifications...');
         characteristic.startNotifications();
@@ -24,9 +47,9 @@ document.getElementById('connect-BLE').addEventListener('click', async () => {
 
         console.log('Connected to ESP32');
     } catch (error) {
-        console.log('Error:', error);
+        console.error('Error:', error);
     }
-});
+}
 
 function handleNotifications(event) {
     const value = new TextDecoder().decode(event.target.value);
@@ -36,11 +59,11 @@ function handleNotifications(event) {
         stopRecording();
     } else if (value === 'button_down') {
         console.log('Button down');
-        startRecording();
+        prepareToRecord();
     }
 }
 
-document.getElementById('connect').addEventListener('click', async () => {
+async function connectSerial() {
     try {
         const port = await navigator.serial.requestPort();
         await port.open({ baudRate: 115200 });
@@ -64,10 +87,25 @@ document.getElementById('connect').addEventListener('click', async () => {
     } catch (error) {
         console.error('There was an error:', error);
     }
-});
+}
 
-document.getElementById('record').addEventListener('mousedown', startRecording);
-document.getElementById('record').addEventListener('mouseup', stopRecording);
+function prepareToRecord() {
+    recordingStartTime = Date.now();
+    holdTimeout = setTimeout(() => {
+        if (audioPlaying) {
+            stopAudio();
+        }
+        startRecording();
+    }, minRecordingTime);
+}
+
+function handleMouseUp() {
+    if (Date.now() - recordingStartTime < minRecordingTime) {
+        clearTimeout(holdTimeout);
+    } else {
+        stopRecording();
+    }
+}
 
 async function startRecording() {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -80,13 +118,59 @@ async function startRecording() {
 
     mediaRecorder.addEventListener('stop', () => {
         const audioBlob = new Blob(audioChunks);
-        transcribeAPI(audioBlob);
         audioChunks = [];
+        
+        if (Date.now() - recordingStartTime >= minRecordingTime) {
+            processAudio(audioBlob);
+        } else {
+            console.log('Recording too short, ignoring.');
+        }
     });
 }
 
 function stopRecording() {
-    mediaRecorder.stop();
+    if (mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+}
+
+function stopAudio() {
+    if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        audioPlaying = false;
+    }
+}
+
+async function processAudio(audioBlob) {
+    const audioContext = new AudioContext();
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+    const rawData = audioBuffer.getChannelData(0); // Get raw PCM data of first channel
+    const samples = 128; // Number of samples to consider for threshold calculation
+    const blockSize = Math.floor(rawData.length / samples); // Number of samples per block
+    let sum = 0;
+
+    for (let i = 0; i < samples; i++) {
+        const blockStart = blockSize * i;
+        let sumSquare = 0;
+        for (let j = 0; j < blockSize; j++) {
+            sumSquare += rawData[blockStart + j] ** 2;
+        }
+        sum += Math.sqrt(sumSquare / blockSize);
+    }
+
+    const amplitude = sum / samples;
+    console.log('Average Amplitude:', amplitude);
+
+    const amplitudeThreshold = 0.01; // Adjust this threshold based on testing
+    if (amplitude >= amplitudeThreshold) {
+        isProcessing = true;
+        transcribeAPI(audioBlob);
+    } else {
+        console.log('Amplitude too low, ignoring.');
+    }
 }
 
 async function transcribeAPI(audioBlob) {
@@ -111,6 +195,7 @@ async function transcribeAPI(audioBlob) {
         sendToChatAPI(transcription);
     } catch (error) {
         console.error('Error:', error);
+        isProcessing = false; // Reset processing flag on error
     }
 }
 
@@ -142,6 +227,7 @@ async function sendToChatAPI(userMessage) {
         readOutLoud(assistantMessage);
     } catch (error) {
         console.error('Error:', error);
+        isProcessing = false; // Reset processing flag on error
     }
 }
 
@@ -163,21 +249,27 @@ async function readOutLoud(text) {
 
         const audioBlob = await response.blob();
         const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-        audio.play();
+        currentAudio = new Audio(audioUrl);
+        currentAudio.play();
+        audioPlaying = true;
+        currentAudio.onended = () => { 
+            audioPlaying = false; 
+            isProcessing = false; 
+        };
     } catch (error) {
         console.error('Error:', error);
+        isProcessing = false; // Reset processing flag on error
     }
 }
 
-document.getElementById('save-key').addEventListener('click', () => {
+function saveApiKey() {
     const apiKey = document.getElementById('api-key').value;
     localStorage.setItem('api-key', apiKey);
-});
+}
 
-window.addEventListener('load', () => {
+function loadApiKey() {
     const savedKey = localStorage.getItem('api-key');
     if (savedKey) {
         document.getElementById('api-key').value = savedKey;
     }
-});
+}
