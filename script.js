@@ -1,5 +1,6 @@
 // Constants
 const serviceUUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+const ledCharacteristic = "f8586726-e964-4135-a2d4-afc3375e50f3";
 const characteristicUUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
 const minRecordingTime = 300; // Minimum recording time in milliseconds
 
@@ -17,6 +18,10 @@ let isProcessing = false;
 let audioPlaying = false;
 let currentAudio;
 let holdTimeout;
+var bleServer;
+var service;
+let isOn = false;
+
 
 // Event Listeners
 document.getElementById('connect-BLE').addEventListener('click', connectBLE);
@@ -25,8 +30,10 @@ document.getElementById('record').addEventListener('mousedown', prepareToRecord)
 document.getElementById('record').addEventListener('mouseup', handleMouseUp);
 document.getElementById('save-key').addEventListener('click', saveApiKey);
 window.addEventListener('load', loadApiKey);
+document.getElementById('characteristic').addEventListener('click', () => { isOn = !isOn; writeOnCharacteristic(isOn ? 0 : 255)});
 
 // Functions
+
 async function connectBLE() {
     try {
         console.log('Requesting Bluetooth Device...');
@@ -35,9 +42,9 @@ async function connectBLE() {
         });
 
         console.log('Connecting to GATT Server...');
-        const server = await bluetoothDevice.gatt.connect();
+        bleServer = await bluetoothDevice.gatt.connect();
         console.log('Getting Service...');
-        const service = await server.getPrimaryService(serviceUUID);
+        service = await bleServer.getPrimaryService(serviceUUID);
         console.log('Getting Characteristic...');
         const characteristic = await service.getCharacteristic(characteristicUUID);
 
@@ -51,6 +58,7 @@ async function connectBLE() {
     }
 }
 
+
 function handleNotifications(event) {
     const value = new TextDecoder().decode(event.target.value);
     console.log('Message from ESP32:', value);
@@ -62,6 +70,27 @@ function handleNotifications(event) {
         prepareToRecord();
     }
 }
+
+function writeOnCharacteristic(value) {
+    if (bleServer && bleServer.connected) {
+        service.getCharacteristic(ledCharacteristic)
+            .then(characteristic => {
+                console.log("Found the LED characteristic: ", characteristic.uuid);
+                const data = new Uint8Array([value]);
+                return characteristic.writeValue(data);
+            })
+            .then(() => {
+                console.log("Value written to LED characteristic:", value);
+            })
+            .catch(error => {
+                console.error("Error writing to the LED characteristic: ", error);
+            });
+    } else {
+        console.error("Bluetooth is not connected. Cannot write to characteristic.");
+        window.alert("Bluetooth is not connected. Cannot write to characteristic. \n Connect to BLE first!");
+    }
+}
+
 
 async function connectSerial() {
     try {
@@ -136,9 +165,11 @@ function stopRecording() {
 
 function stopAudio() {
     if (currentAudio) {
+        
         currentAudio.pause();
         currentAudio.currentTime = 0;
         audioPlaying = false;
+        
     }
 }
 
@@ -249,18 +280,46 @@ async function readOutLoud(text) {
 
         const audioBlob = await response.blob();
         const audioUrl = URL.createObjectURL(audioBlob);
-        currentAudio = new Audio(audioUrl);
-        currentAudio.play();
-        audioPlaying = true;
-        currentAudio.onended = () => { 
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const audioElement = new Audio(audioUrl);
+        const source = audioContext.createMediaElementSource(audioElement);
+        const analyser = audioContext.createAnalyser();
+        
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
+
+        audioElement.play();
+        let audioPlaying = true;
+        let isProcessing = false;
+        
+        audioElement.onended = () => { 
             audioPlaying = false; 
             isProcessing = false; 
+            writeOnCharacteristic(0);
         };
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        function updateAmplitude() {
+            if (audioPlaying) {
+                analyser.getByteTimeDomainData(dataArray);
+                const amplitude = Math.max(...dataArray) - Math.min(...dataArray);
+                console.log('Amplitude:', amplitude);
+                // Update a value with the amplitude here
+                writeOnCharacteristic(Math.min(255, (amplitude-1) * 4));
+                setTimeout(updateAmplitude, 10);
+            }
+        }
+
+        updateAmplitude();
+
     } catch (error) {
         console.error('Error:', error);
         isProcessing = false; // Reset processing flag on error
     }
 }
+
+
 
 function saveApiKey() {
     const apiKey = document.getElementById('api-key').value;
