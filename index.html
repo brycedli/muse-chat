@@ -6,17 +6,30 @@
     <title>Voice Recorder and Chat</title>
 </head>
 <body>
+    <!-- <button id="start">Start recognition</button> -->
     <button id="connect">Connect via Serial</button>
     <button id="connect-BLE">Connect via BLE</button>
-    <button id="record">Hold to Record</button>
+    <button id="record">Hold to manually record</button>
 
     <button id="characteristic">Toggle characteristic</button>
+    
+    <input type="text" id="open-api-key" placeholder="OpenAI key" value="">
+    <button id="save-key-open">Save OpenAI Key</button>
+    <input type="text" id="eleven-api-key" placeholder="Elevenlabs key" value="">
+    <button id="save-key-eleven">Save ElevenLabs Key</button>
+
     <div id="output"></div>
     <div id="transcription"></div>
     <div id="chat"></div>
-    <input type="text" id="api-key" placeholder="Enter your API key" value="">
-    <button id="save-key">Save Key</button>
+    
+    <input type="text" id="chat-input" placeholder="Type something" value="">
+    <button id="chat-send">Send message</button>
 
-    <script src="script.js"></script>
+    <!-- <script src="script.js"></script> -->
+    <script src="api.js"></script>
+    <script src="bluetooth.js"></script>
+    <script src="offline-recording.js"></script>
+    <script src="serial.js"></script>
+    <script src="read.js"></script>
 </body>
 </html>

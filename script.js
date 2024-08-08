@@ -28,8 +28,10 @@ document.getElementById('connect-BLE').addEventListener('click', connectBLE);
 document.getElementById('connect').addEventListener('click', connectSerial);
 document.getElementById('record').addEventListener('mousedown', prepareToRecord);
 document.getElementById('record').addEventListener('mouseup', handleMouseUp);
-document.getElementById('save-key').addEventListener('click', saveApiKey);
-window.addEventListener('load', loadApiKey);
+document.getElementById('save-key-eleven').addEventListener('click', () => {saveApiKey('eleven')});
+document.getElementById('save-key-open').addEventListener('click', () => {saveApiKey('open')});
+document.getElementById('chat-send').addEventListener('click', manualSend);
+window.addEventListener('load', () =>{loadApiKey('eleven'), loadApiKey('open')});
 document.getElementById('characteristic').addEventListener('click', () => { isOn = !isOn; writeOnCharacteristic(isOn ? 0 : 255)});
 
 // Functions
@@ -87,7 +89,7 @@ function writeOnCharacteristic(value) {
             });
     } else {
         console.error("Bluetooth is not connected. Cannot write to characteristic.");
-        window.alert("Bluetooth is not connected. Cannot write to characteristic. \n Connect to BLE first!");
+        // window.alert("Bluetooth is not connected. Cannot write to characteristic. \n Connect to BLE first!");
     }
 }
 
@@ -239,7 +241,7 @@ async function sendToChatAPI(userMessage) {
     chatMessages.push({ role: "user", content: userMessage });
 
     try {
-        const apiKey = localStorage.getItem('api-key');
+        const apiKey = localStorage.getItem('open-api-key');
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -264,7 +266,7 @@ async function sendToChatAPI(userMessage) {
 
 async function readOutLoud(text) {
     try {
-        const apiKey = localStorage.getItem('api-key');
+        const apiKey = localStorage.getItem('open-api-key');
         const response = await fetch('https://api.openai.com/v1/audio/speech', {
             method: 'POST',
             headers: {
@@ -295,7 +297,10 @@ async function readOutLoud(text) {
         audioElement.onended = () => { 
             audioPlaying = false; 
             isProcessing = false; 
-            writeOnCharacteristic(0);
+            if (bleServer && bleServer.connected){
+
+                writeOnCharacteristic(0);
+            }
         };
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
@@ -310,8 +315,9 @@ async function readOutLoud(text) {
                 setTimeout(updateAmplitude, 10);
             }
         }
-
-        updateAmplitude();
+        if (bleServer && bleServer.connected){
+            updateAmplitude();
+        }
 
     } catch (error) {
         console.error('Error:', error);
@@ -321,14 +327,23 @@ async function readOutLoud(text) {
 
 
 
-function saveApiKey() {
-    const apiKey = document.getElementById('api-key').value;
-    localStorage.setItem('api-key', apiKey);
+function saveApiKey(type) {
+    const apiKey = document.getElementById(type + '-api-key').value;
+    localStorage.setItem(type + '-api-key', apiKey);
+    console.log(type, apiKey);
 }
 
-function loadApiKey() {
-    const savedKey = localStorage.getItem('api-key');
+function loadApiKey(type) {
+    const savedKey = localStorage.getItem(type + '-api-key');
     if (savedKey) {
-        document.getElementById('api-key').value = savedKey;
+        console.log(type, savedKey);
+        document.getElementById(type + '-api-key').value = savedKey;
     }
+}
+
+function manualSend() {
+    const userInput = document.getElementById('chat-input').value;
+    addChatMessage(userInput, 'user');
+    sendToChatAPI(userInput);
+    document.getElementById('chat-input').value = '';
 }
