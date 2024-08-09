@@ -21,7 +21,7 @@ recognition.onresult = function(event) {
     console.log("Heard:", transcript);
 
     if (!activated) {
-        if (transcript.toLowerCase() === "hello") {
+        if (transcript.toLowerCase().includes("hello")) {
             activated = true;
             console.log("Activation detected. Now listening for commands...");
         }

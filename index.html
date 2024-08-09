@@ -1,29 +1,134 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="height: 100%">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voice Recorder and Chat</title>
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300..700&display=swap" rel="stylesheet">
 </head>
-<body>
-    <!-- <button id="start">Start recognition</button> -->
-    <button id="connect">Connect via Serial</button>
-    <button id="connect-BLE">Connect via BLE</button>
-    <button id="record">Hold to manually record</button>
 
-    <button id="characteristic">Toggle characteristic</button>
-    
-    <input type="text" id="open-api-key" placeholder="OpenAI key" value="">
-    <button id="save-key-open">Save OpenAI Key</button>
-    <input type="text" id="eleven-api-key" placeholder="Elevenlabs key" value="">
-    <button id="save-key-eleven">Save ElevenLabs Key</button>
+<body
+    style=" user-select: none; background-color: black; display: flex; justify-content: center; align-items: center; margin: 0; height: 100%">
+    <div id="controls"
+        style="position: absolute; top: 12px; left: 12px; color: white; display: flex; flex-direction: column; gap: 4px; width: 250px">
+        <button id="connect">Connect via Serial</button>
+        <button id="connect-BLE">Connect via BLE</button>
+        <button id="record">Hold to manually record</button>
 
-    <div id="output"></div>
-    <div id="transcription"></div>
-    <div id="chat"></div>
-    
-    <input type="text" id="chat-input" placeholder="Type something" value="">
-    <button id="chat-send">Send message</button>
+        <button id="characteristic">Toggle characteristic</button>
+
+        <input type="password" id="open-api-key" placeholder="OpenAI key" value="">
+        <button id="save-key-open">Save LLM Key</button>
+        <input type="password" id="eleven-api-key" placeholder="Elevenlabs key" value="">
+        <button id="save-key-eleven">Save Voice Key</button>
+
+        <div id="output">Chat output</div>
+        <div id="transcription"></div>
+        <div id="chat"></div>
+
+        <input type="text" id="chat-input" placeholder="Type something" value="">
+        <button id="chat-send">Manual send</button>
+    </div>
+    <div id="mockup"
+        style="width: 390px; height: 844px; background-color: white; border-radius: 32px; overflow-y:scroll;  overflow-x:hidden; display: flex; flex-direction: column; gap: 24px">
+        <div style="position: sticky;
+top: 0; ">
+            <img src="mockup/safari.png" style="width: 390px;" />
+
+        </div>
+        <div style="position:fixed; width: 390px;">
+            <div
+                id="overlay" style="left: 0; right: 0; top: 98px;position: absolute; display: flex; height: 748px;justify-content: center;align-items: center;gap: 4px;flex-shrink: 0; background: rgba(0, 0, 0, 0.20); padding: 0px 24px;">
+                <div
+                    style="display: flex;padding: 24px;flex-direction: column;justify-content: center;align-items: center;gap: 18px;flex: 1 0 0; border-radius: 20px; background: #FFF;">
+                    <div
+                        style="display: flex;flex-direction: column;align-items: center;gap: 12px;align-self: stretch;">
+
+                        <h1>Add conversation point</h1>
+                        <div
+                            class = "button"  onclick="changeSuggestion()" style="display: flex;padding: 12px;align-items: center;gap: 12px;align-self: stretch; border-radius: 8px; border: 1px solid rgba(255, 79, 153, 0.20); background: rgba(255, 79, 153, 0.05);">
+                            <p id="suggestion-text"class="button-text" style="color: var(--pinkk, #FF4F99);">
+                                Try: Discussing feelings about a recent family change.
+                            </p>
+                            <img src="mockup/refresh.png" style="width: 20px;">
+                        </div>
+                        <textarea id="memory-input" style="display: flex; padding: 12px; gap: 12px; align-self: stretch; border-radius: 8px;border: 1px solid rgba(83, 40, 103, 0.10); height: 180px;  color: black;font-family: 'Quicksand';font-size: 16px;font-style: normal;font-weight: 500;line-height: normal;" 
+                        placeholder="What should Rocky know about Bryce?"></textarea>
+                        <div class="button"
+                            style="display: flex; padding: 12px; gap: 12px; align-self: stretch; border-radius: 8px; align-items: center; border: 1px solid rgba(83, 40, 103, 0.10); justify-content: space-between; flex: 1 0 0;">
+                            <p class="button-text" style="color: #532867;">
+                                Expires next week
+                            </p>
+                            <img src="mockup/chevron.png" style="width: 19px;">
+                        </div>
+                        <div class="button"
+                            style="display: flex; padding: 12px; gap: 12px; align-self: stretch; border-radius: 8px; align-items: center; border: 1px solid rgba(83, 40, 103, 0.10); justify-content: space-between; flex: 1 0 0;">
+                            <p class="button-text" style="color: #532867;">
+                                Bring it up next conversation
+                            </p>
+                            <img src="mockup/chevron.png" style="width: 19px;">
+                        </div>
+                        <div class="button" id="done-button" onclick="onSubmit()" 
+                            style="display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 12px; gap: 12px; align-self: stretch; background: var(--pinkk, #FF4F99); border-radius: 8px;  opacity: 0.5;">
+                            <p class="button-text" style="color: white;">
+                                Done
+                            </p>
+                        </div>
+                        <div onclick="closeOverlay()" class="button" 
+                            style="display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 12px; gap: 12px; align-self: stretch; border-radius: 8px; border: 1px solid rgba(83, 40, 103, 0.10);">
+                            <p class="button-text" style="color: #532867;">
+                                Cancel
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+        <img src="mockup/top static.png" style="width: 390px; margin-top: -24px" />
+        <div
+            id="memory-container" style="margin-left: 24px; margin-right: 24px; width: 342px; display: flex;flex-direction: column; align-items: flex-start; gap: 12px;">
+            <div
+                style="display: flex; padding-bottom: 4px; align-items: center; gap: 12px; justify-content: space-between; align-self: stretch; align-items: center; padding-bottom: 4px;;">
+                <h2>Current conversations</h2>
+                <img class="button" onclick="openOverlay()" src="mockup/plusButton.png" style="width: 44px; height: 44px;">
+            </div>
+            <div id="memory-template" class="memory">
+                <div style="display: flex; flex-direction: column; gap: 8px; flex: 1 0 0; ">
+                    <h3 class="memory-title">
+                        Talk to Bryce about his grandpa dying
+                    </h3>
+                    <div>
+                        <p><span><img src="mockup/expires.png"
+                                    style="width: 21px; margin-bottom: -2px"></span>&nbsp;Next conversation</p>
+                        <p class="memory-expires">Expires Never</p>
+                    </div>
+                </div>
+                <img src="mockup/pencil.png" style="width: 16px;">
+                <img src="mockup/drag_indicator.png" style="width: 24px;">
+            </div>
+            <div class="memory">
+                <div style="display: flex; flex-direction: column; gap: 8px; flex: 1 0 0; ">
+                    <h3 class="memory-title">
+                        Starting at new school
+                    </h3>
+                    <div>
+                        <p><span><img src="mockup/expires.png"
+                                    style="width: 21px; margin-bottom: -2px"></span>&nbsp;Next conversation</p>
+                        <p class="memory-expires">Expires Aug. 28</p>
+                    </div>
+                </div>
+                <img src="mockup/pencil.png" style="width: 16px;">
+                <img src="mockup/drag_indicator.png" style="width: 24px;">
+            </div>
+        </div>
+        <img src="mockup/suggested.png" style="width: 390px;" />
+    </div>
+
 
     <!-- <script src="script.js"></script> -->
     <script src="api.js"></script>
@@ -31,5 +136,7 @@
     <script src="offline-recording.js"></script>
     <script src="serial.js"></script>
     <script src="read.js"></script>
+    <script src="mockup.js"></script>
 </body>
+
 </html>
